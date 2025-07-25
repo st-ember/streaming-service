@@ -1,7 +1,11 @@
 package delivery
 
 import (
+	"net/http"
+	"path/filepath"
+
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"st-ember.github.com/streamingservice/internal/application"
 )
 
@@ -41,5 +45,36 @@ func (h *VideoHandler) ServeSegment(c *gin.Context) {
 }
 
 func (h *VideoHandler) HandleUpload(c *gin.Context) {
+	if _, err := c.Request.MultipartReader(); err != nil {
+		http.Error(c.Writer, "request must be multipart/form-data", http.StatusUnsupportedMediaType)
+		return
+	}
 
+	userId, err := uuid.Parse(c.Request.FormValue("user_id"))
+	if err != nil {
+		http.Error(c.Writer, "cannot parse user id", http.StatusInternalServerError)
+		return
+	}
+
+	title := c.Request.FormValue("title")
+	description := c.Request.FormValue("description")
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		http.Error(c.Writer, "cannot read file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	input := application.UploadInput{
+		UserId:      userId,
+		Title:       title,
+		Description: description,
+		File:        file,
+		FileName:    header.Filename,
+		Extension:   filepath.Ext(header.Filename),
+	}
+
+	h.usecase.CreateResource(input)
+
+	c.Writer.WriteHeader(http.StatusOK)
 }
